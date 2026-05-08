@@ -7,12 +7,12 @@ import { clearSession, getSession } from "../lib/auth";
 
 const navItems = [
   { label: "Home", href: "/" },
-  { label: "Explore", href: "#" },
-  { label: "Cultural Map", href: "#" },
+  { label: "Explore", href: "/explore" },
+  { label: "Cultural Map", href: "/cultural-map" },
   { label: "Upload Tradition", href: "/upload" },
-  { label: "Community", href: "#" },
+  { label: "Community", href: "/community" },
   { label: "AI Insights", href: "#" },
-  { label: "Saved", href: "#" }
+  { label: "Saved", href: "/saved" }
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {

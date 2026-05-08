@@ -6,6 +6,7 @@ import type { MediaAnalysisResult, SummaryResult, SupportedLanguage, TraditionCr
 import { Shell } from "../../components/shell";
 import { getSession } from "../../lib/auth";
 import { api } from "../../lib/api";
+import { addSavedItem, normalizeMediaUrl } from "../../lib/saved";
 
 const langs: SupportedLanguage[] = ["English", "Kannada", "Hindi", "Tamil", "Telugu", "Malayalam"];
 
@@ -28,6 +29,9 @@ export default function UploadPage() {
   const [analysis, setAnalysis] = useState<MediaAnalysisResult | null>(null);
   const [privacy, setPrivacy] = useState<"public" | "community" | "private">("public");
   const [loading, setLoading] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationNote, setTranslationNote] = useState("");
 
   const [isRecording, setIsRecording] = useState(false);
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
@@ -86,18 +90,54 @@ export default function UploadPage() {
     const data = await api.transcribe();
     setRawTranscript(data.transcript);
 
-    // Convert recorded speech text into the currently selected preferred language.
-    const localized = await api.translate(data.transcript, targetLanguage);
-    setTranscript(localized.translatedText);
-    setTranslation((s) => ({ ...s, [targetLanguage]: localized.translatedText }));
+    try {
+      const localized = await api.translate(data.transcript, targetLanguage);
+      setTranscript(localized.translatedText);
+      setTranslation((s) => ({ ...s, [targetLanguage]: localized.translatedText }));
+      setTranslationNote(`Voice translated to ${targetLanguage}.`);
+    } catch {
+      const fallback = `[${targetLanguage}] ${data.transcript}`;
+      setTranscript(fallback);
+      setTranslation((s) => ({ ...s, [targetLanguage]: fallback }));
+      setTranslationNote(`Translation service unavailable, showing fallback for ${targetLanguage}.`);
+    }
 
     const aiSummary = await api.summarize(data.transcript);
     setSummary(aiSummary);
   }
 
   async function doTranslate() {
-    const t = await api.translate(transcript || core.description, targetLanguage);
-    setTranslation((s) => ({ ...s, [targetLanguage]: t.translatedText }));
+    const sourceText = rawTranscript || transcript || core.description;
+    if (!sourceText.trim()) {
+      setTranslationNote("Add or record text first to translate.");
+      return;
+    }
+    setIsTranslating(true);
+    try {
+      const t = await api.translate(sourceText, targetLanguage);
+      setTranslation((s) => ({ ...s, [targetLanguage]: t.translatedText }));
+      setTranscript(t.translatedText);
+      setTranslationNote(`Translated to ${targetLanguage}.`);
+    } catch {
+      const fallback = `[${targetLanguage}] ${sourceText}`;
+      setTranslation((s) => ({ ...s, [targetLanguage]: fallback }));
+      setTranscript(fallback);
+      setTranslationNote(`Translation service unavailable, showing fallback for ${targetLanguage}.`);
+    } finally {
+      setIsTranslating(false);
+    }
+  }
+
+  async function generateSummary() {
+    const sourceText = rawTranscript || transcript || core.description;
+    if (!sourceText.trim()) return;
+    setIsSummarizing(true);
+    try {
+      const aiSummary = await api.summarize(sourceText);
+      setSummary(aiSummary);
+    } finally {
+      setIsSummarizing(false);
+    }
   }
 
   async function uploadMedia() {
@@ -116,6 +156,21 @@ export default function UploadPage() {
   async function submit() {
     if (!canSubmit) return;
     setLoading(true);
+    const queue = [...files];
+    if (recordedBlob) {
+      queue.push(new File([recordedBlob], `voice-note-${Date.now()}.webm`, { type: "audio/webm" }));
+    }
+
+    // If user has selected files but didn't click "Upload + Analyze", upload now automatically.
+    let mediaForSubmit = uploaded;
+    if (queue.length > 0 && uploaded.length === 0) {
+      const up = await api.uploadMedia(queue);
+      mediaForSubmit = up.files;
+      setUploaded(up.files);
+      const mediaInsights = await api.analyzeMedia();
+      setAnalysis(mediaInsights);
+    }
+
     const created = await api.createTradition({
       ...core,
       transcript,
@@ -129,7 +184,7 @@ export default function UploadPage() {
           historicalContext: "Unknown"
         } as SummaryResult),
       translations: translation,
-      media: uploaded,
+      media: mediaForSubmit,
       mediaAnalysis:
         analysis ||
         ({
@@ -142,6 +197,17 @@ export default function UploadPage() {
           generatedTags: []
         } as MediaAnalysisResult),
       privacy
+    });
+    const heroMedia =
+      mediaForSubmit.find((x) => x.mimeType.startsWith("image/"))?.url ||
+      mediaForSubmit[0]?.url ||
+      "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop";
+    addSavedItem({
+      id: created._id,
+      title: core.traditionName || "Untitled Tradition",
+      tag: summary?.ritualCategory || "Tradition",
+      desc: core.description || summary?.shortSummary || "Community-preserved tradition record.",
+      img: normalizeMediaUrl(heroMedia)
     });
     setLoading(false);
     router.push(`/success/${created._id}`);
@@ -179,11 +245,7 @@ export default function UploadPage() {
               </div>
               {recordedUrl && <audio controls src={recordedUrl} className="mt-3 w-full" />}
               <textarea className="mt-4 min-h-28 w-full rounded-xl bg-black/30 p-3" value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder="Live transcription appears here..." />
-              {rawTranscript && (
-                <p className="mt-2 text-xs text-zinc-400">
-                  Original transcription: {rawTranscript}
-                </p>
-              )}
+              {rawTranscript && <p className="mt-2 text-xs text-zinc-400">Original transcription: {rawTranscript}</p>}
             </div>
 
             <div className="glass rounded-2xl p-6">
@@ -192,9 +254,57 @@ export default function UploadPage() {
                 <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value as SupportedLanguage)} className="rounded-xl bg-black/30 p-3">
                   {langs.map((l) => <option key={l}>{l}</option>)}
                 </select>
-                <button onClick={doTranslate} className="rounded-xl bg-gradient-to-r from-gold to-amber-500 px-5 py-3 font-ui text-black">Translate</button>
+                <button onClick={doTranslate} disabled={isTranslating} className="rounded-xl bg-gradient-to-r from-gold to-amber-500 px-5 py-3 font-ui text-black disabled:opacity-60">
+                  {isTranslating ? "Translating..." : "Translate"}
+                </button>
               </div>
+              {translationNote && <p className="mt-2 text-xs text-gold">{translationNote}</p>}
               <pre className="mt-4 whitespace-pre-wrap rounded-xl bg-black/40 p-3 text-sm">{translation[targetLanguage] || "Translated output appears here."}</pre>
+            </div>
+
+            <div className="glass rounded-2xl p-6">
+              <h3 className="font-display text-3xl">AI Summarizer</h3>
+              <p className="mt-2 text-sm text-zinc-300">
+                Generate cultural summary, significance, category, and historical context from your transcript or description.
+              </p>
+              <button
+                onClick={generateSummary}
+                disabled={isSummarizing}
+                className="mt-4 rounded-xl bg-gradient-to-r from-gold to-amber-500 px-5 py-3 font-ui text-black disabled:opacity-60"
+              >
+                {isSummarizing ? "Analyzing..." : "Generate AI Summary"}
+              </button>
+
+              {summary && (
+                <div className="mt-4 space-y-3 rounded-xl border border-gold/20 bg-black/35 p-4 text-sm">
+                  <div>
+                    <p className="font-ui text-[10px] uppercase tracking-[0.16em] text-gold">Short Summary</p>
+                    <p className="mt-1 text-zinc-200">{summary.shortSummary}</p>
+                  </div>
+                  <div>
+                    <p className="font-ui text-[10px] uppercase tracking-[0.16em] text-gold">Cultural Significance</p>
+                    <p className="mt-1 text-zinc-200">{summary.culturalSignificance}</p>
+                  </div>
+                  <div>
+                    <p className="font-ui text-[10px] uppercase tracking-[0.16em] text-gold">Ritual Category</p>
+                    <p className="mt-1 text-zinc-200">{summary.ritualCategory}</p>
+                  </div>
+                  <div>
+                    <p className="font-ui text-[10px] uppercase tracking-[0.16em] text-gold">Historical Context</p>
+                    <p className="mt-1 text-zinc-200">{summary.historicalContext}</p>
+                  </div>
+                  <div>
+                    <p className="font-ui text-[10px] uppercase tracking-[0.16em] text-gold">Keywords</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {summary.keywords.map((k) => (
+                        <span key={k} className="rounded bg-gold/10 px-2 py-1 text-xs text-gold">
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="glass rounded-2xl p-6">

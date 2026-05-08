@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import gsap from "gsap";
 import { Shell } from "../components/shell";
 import { Section } from "../components/section";
 import { AmbientScene } from "../components/ambient-scene";
+import { getSavedItems, isSaved, toggleSaved, type SavedTradition } from "../lib/saved";
 
 const stats = [
   ["3250+", "Traditions"],
@@ -15,18 +16,21 @@ const stats = [
 
 const archiveCards = [
   {
+    id: "kambala",
     title: "Kambala",
     tag: "Ritual",
     desc: "The thunderous bull race through the slushy fields of coastal Karnataka.",
     img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBe4k7_19tEPlhDoIEWFR79ooyzNTAji0sZzzFiMpdAxJI-1Rp8djQqacU1tKBnDxYjF7DmHhS88VO4WguKu6y24a9vOU3tiB5iTzq5vcBqvJgyNX3xYRz38wSPZDpAjnq6PR3aqmPQRuaDOR4gvv1m3zPsqEJbQS0Nj20e7icqx5kcuGCGT11lmQHFgoZd2sP4G0i3L3736QSuUIBEN6MWyWxSwx6r6uxrGZn8TsBeNZAVFN0pTN_yMG3e0oXSOLSJbsGVV27SG-U"
   },
   {
+    id: "theyyam",
     title: "Theyyam",
     tag: "Sacred",
     desc: "A dance of the gods where man becomes the divine vessel through color and flame.",
     img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAuGmEy4p1A7K_d6TYVbkzxZDWTv9jrLqJ9so416PuzoWhCJpn6g9KZ5ZZk_3b4Y9j4x5fD8APlp0Bc1kMot6JXfHvph5k34MvyX_V2bPTuH6JOFELG9gjdyxvEQvJdozE5Ox0qNqqnHFseu1e716CzYVRF-0Y8BsSAgLCfY_ILvlOvtiZYss3bzWYizAsPQZODVfR8xl-uj9jVJ6EGMP0NTmRJ-yvB1QGs4YBRk43H_UdMCjG1saLtoTUyjJTwyEAyTIf2vSYWaHg"
   },
   {
+    id: "yakshagana",
     title: "Yakshagana",
     tag: "Theater",
     desc: "Celestial drama blending dance, music, and improvised dialogue from the epics.",
@@ -35,9 +39,26 @@ const archiveCards = [
 ];
 
 export default function HomePage() {
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [savedItems, setSavedItems] = useState<SavedTradition[]>([]);
+
   useEffect(() => {
     gsap.fromTo(".hero-copy", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.9, stagger: 0.1 });
+    setSavedIds(archiveCards.filter((card) => isSaved(card.id)).map((card) => card.id));
+    setSavedItems(getSavedItems());
   }, []);
+
+  function onToggleSave(card: (typeof archiveCards)[number]) {
+    const nowSaved = toggleSaved({
+      id: card.id,
+      title: card.title,
+      tag: card.tag,
+      desc: card.desc,
+      img: card.img
+    });
+    setSavedIds((prev) => (nowSaved ? [...prev, card.id] : prev.filter((id) => id !== card.id)));
+    setSavedItems(getSavedItems());
+  }
 
   return (
     <Shell>
@@ -47,14 +68,17 @@ export default function HomePage() {
           <img
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4BXtXkJ6xm3ixF3SAKuvqVGtExQ-MCR05WjXfMXbVOSzrIJ-zesGOdxD8HS0O9NE1MgQ44ttqc1yagKOLaXPSA0iOdwuctSq1JqivFDHG7b7D0gYWgILqbyuv7ybudyA5GQ7_NCjsxpq8RrnuQJLCq-znq1MOLbqDhq181W-wKAHc4YfjdWq-OpntpQ-hTlg_FBRLohkkZeguSR7Ehb4TGWx6SgpqnfG-Ucp-cuxYWminNqhMTu9RXEM0peTPIKGdi3i8Ifg5vBI"
             alt="Hero Fire"
-            className="h-[430px] w-full object-cover opacity-65"
+            className="h-[560px] w-full object-cover opacity-65 md:h-[620px]"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/70" />
-          <div className="hero-copy absolute left-6 top-10 z-10 max-w-[540px]">
+          <div className="hero-copy absolute inset-y-0 left-6 z-10 flex max-w-[560px] flex-col justify-center py-10">
             <p className="mb-3 inline-block rounded border border-gold/70 bg-gold/10 px-2.5 py-1 font-ui text-[10px] uppercase tracking-[0.12em] text-gold">
               AI-Powered Preservation
             </p>
-            <h1 className="font-display text-5xl font-bold leading-[1.04] md:text-6xl">
+            <h1 className="font-display text-5xl font-bold leading-[1.04] md:text-[82px]">
               Preserving Traditions
               <br />
               Before They <span className="text-gold">Disappear</span>
@@ -62,7 +86,7 @@ export default function HomePage() {
             <p className="mt-3 max-w-[470px] text-sm leading-relaxed text-zinc-300">
               Every hour, a dialect dies. Every day, a ritual is forgotten. HeritageVault uses cinematic archival tech and neural mapping to secure humanity&apos;s intangible soul.
             </p>
-            <div className="mt-5 flex gap-2">
+            <div className="mt-6 flex flex-wrap gap-2">
               <button className="rounded-sm bg-gradient-to-r from-gold to-amber-500 px-4 py-2 font-ui text-[11px] uppercase tracking-[0.14em] text-black">
                 Document a Tradition
               </button>
@@ -114,6 +138,8 @@ export default function HomePage() {
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuAy07ii34hvgcZnhGqxlv1cuzqkbl6Vxqu5-j1A2fVlj6sKm2n5tRpLo2s9yT6sGCNkm70JjanIv_MxSH4MqUTc4LGCpHMK6aJFa6p-62fqs5Evi9gLobuyK_5NRoEP374adiraxYaURX3J_impY2svJxv2LM0h-f-jML4HhpCLbIieCZYbLSqAgiLlge5DoR61jpR-HD3A1oDqM7jLw4ACYWCNGMEcnAI5go_5QVcxi_sbu6jsBCUL0wuH1uAckdXFkdJzBBxRKi4"
               alt="India map"
               className="h-[250px] w-full rounded-lg object-cover opacity-60"
+              loading="lazy"
+              decoding="async"
             />
           </div>
         </Section>
@@ -128,17 +154,58 @@ export default function HomePage() {
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             {archiveCards.map((card) => (
-              <article key={card.title} className="group overflow-hidden rounded-lg border border-gold/20 bg-[#11171f]">
-                <img src={card.img} alt={card.title} className="h-[180px] w-full object-cover transition group-hover:scale-[1.02]" />
+              <article key={card.id} className="group overflow-hidden rounded-lg border border-gold/20 bg-[#11171f]">
+                <img
+                  src={card.img}
+                  alt={card.title}
+                  className="h-[180px] w-full object-cover transition group-hover:scale-[1.02]"
+                  loading="lazy"
+                  decoding="async"
+                />
                 <div className="p-3">
                   <p className="font-ui text-[10px] uppercase tracking-[0.14em] text-gold/90">{card.tag}</p>
                   <h3 className="mt-1 font-display text-4xl font-bold">{card.title}</h3>
                   <p className="mt-1 text-xs text-zinc-400">{card.desc}</p>
-                  <button className="mt-3 font-ui text-[10px] uppercase tracking-[0.14em] text-gold">Watch Archive</button>
+                  <div className="mt-3 flex gap-3">
+                    <button className="font-ui text-[10px] uppercase tracking-[0.14em] text-gold">Watch Archive</button>
+                    <button
+                      onClick={() => onToggleSave(card)}
+                      className={`font-ui text-[10px] uppercase tracking-[0.14em] ${
+                        savedIds.includes(card.id) ? "text-emerald-300" : "text-zinc-300"
+                      }`}
+                    >
+                      {savedIds.includes(card.id) ? "Saved" : "Save"}
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}
           </div>
+        </Section>
+
+        <Section className="mt-14">
+          <div className="mb-4 flex items-end justify-between">
+            <h2 className="font-display text-5xl font-bold">Saved <span className="text-gold">Preservations</span></h2>
+            <a href="/saved" className="font-ui text-[10px] uppercase tracking-[0.16em] text-gold">Open Saved</a>
+          </div>
+          {savedItems.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 p-5 text-sm text-zinc-400">
+              No preserved items yet. Save from archives or submit a new tradition from Upload.
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-3">
+              {savedItems.slice(0, 3).map((item) => (
+                <article key={item.id} className="overflow-hidden rounded-lg border border-gold/20 bg-[#10161d]">
+                  <img src={item.img} alt={item.title} className="h-[160px] w-full object-cover" loading="lazy" decoding="async" />
+                  <div className="p-3">
+                    <p className="font-ui text-[10px] uppercase tracking-[0.14em] text-gold">{item.tag}</p>
+                    <h3 className="mt-1 font-display text-3xl">{item.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{item.desc}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </Section>
 
         <Section className="mt-16 rounded-xl border border-gold/20 bg-[#0f151d] p-8">
