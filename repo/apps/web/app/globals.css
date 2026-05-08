@@ -1,0 +1,23 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Montserrat:wght@600;700;800&family=Space+Grotesk:wght@400;600;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-void text-zinc-100 font-body;
+  background-image: radial-gradient(circle at 10% 0%, rgba(255, 123, 0, 0.14), transparent 35%),
+    radial-gradient(circle at 90% 10%, rgba(255, 204, 112, 0.1), transparent 42%),
+    linear-gradient(180deg, #060709 0%, #0d0f14 65%, #120b08 100%);
+}
+
+.glass {
+  @apply border border-gold/20 bg-white/[0.04] backdrop-blur-xl;
+}
+
+.glow-hover {
+  @apply transition duration-300 hover:shadow-glow hover:border-gold/70;
+}
